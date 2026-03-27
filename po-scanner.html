@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ST Bakery — PO Scanner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #111;
+  --surface: #1c1c1e;
+  --surface2: #252528;
+  --border: #2c2c2e;
+  --accent: #f5c842;
+  --text: #f0ede6;
+  --text-dim: #888;
+  --green: #30d158;
+  --red: #ff453a;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Sarabun', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 15px;
+}
+
+/* Header */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: sticky; top: 0; z-index: 100;
+}
+.logo {
+  background: var(--accent); color: #000;
+  font-weight: 800; font-size: 13px;
+  width: 36px; height: 36px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  letter-spacing: -1px; flex-shrink: 0;
+}
+header h1 { font-size: 16px; font-weight: 600; }
+header p { font-size: 12px; color: var(--text-dim); }
+.counter-badge {
+  margin-left: auto;
+  background: #1a2a1a; border: 1px solid #2a4a2a; color: var(--green);
+  padding: 4px 12px; border-radius: 20px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Layout */
+.layout { display: flex; height: calc(100vh - 65px); }
+
+/* Left Panel */
+.left-panel {
+  width: 340px; min-width: 280px;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  background: var(--surface);
+}
+.panel-title {
+  padding: 12px 18px;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 1.2px; text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.panel-title span { color: var(--accent); font-size: 12px; }
+
+/* Upload Zone */
+.upload-zone {
+  margin: 14px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 22px 14px;
+  text-align: center; cursor: pointer;
+  transition: all 0.2s; background: var(--bg); flex-shrink: 0;
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: var(--accent); background: #1c1700;
+}
+.upload-zone .icon { font-size: 26px; margin-bottom: 7px; }
+.upload-zone h3 { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.upload-zone p { font-size: 11px; color: var(--text-dim); }
+.upload-zone input { display: none; }
+
+/* Queue */
+.queue {
+  flex: 1; overflow-y: auto;
+  padding: 8px 12px; display: flex; flex-direction: column; gap: 6px;
+}
+.queue-item {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 11px;
+  display: flex; align-items: center; gap: 9px; transition: all 0.15s;
+}
+.queue-item .thumb {
+  width: 42px; height: 42px; border-radius: 6px;
+  object-fit: cover; background: var(--surface2); flex-shrink: 0;
+}
+.queue-item .info { flex: 1; min-width: 0; }
+.queue-item .fname {
+  font-size: 12px; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.queue-item .status { font-size: 11px; margin-top: 2px; }
+.status-wait { color: var(--text-dim); }
+.status-reading { color: var(--accent); }
+.status-done { color: var(--green); }
+.status-error { color: var(--red); }
+.btn-remove {
+  background: none; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: 15px; padding: 2px 6px;
+  border-radius: 4px; transition: all 0.15s; flex-shrink: 0;
+}
+.btn-remove:hover { background: var(--surface2); color: var(--red); }
+
+/* Action bar */
+.action-bar {
+  padding: 12px 14px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 7px;
+}
+.btn {
+  width: 100%; padding: 10px 16px; border-radius: 8px; border: none;
+  font-family: 'Sarabun', sans-serif; font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.btn-primary { background: var(--accent); color: #000; }
+.btn-primary:hover { background: #e8b800; }
+.btn-primary:disabled { background: #444; color: #777; cursor: not-allowed; }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: #333; }
+.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Right Panel */
+.right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.table-header {
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface); flex-shrink: 0;
+}
+.table-header h2 { font-size: 14px; font-weight: 600; }
+.table-header p { font-size: 12px; color: var(--text-dim); }
+.btn-export {
+  padding: 8px 18px; background: var(--green); color: #000;
+  border: none; border-radius: 7px;
+  font-family: 'Sarabun', sans-serif; font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: all 0.15s;
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.btn-export:hover { background: #25c04e; }
+.btn-export:disabled { background: #444; color: #777; cursor: not-allowed; }
+
+/* Progress */
+.progress-bar { height: 2px; background: var(--surface2); flex-shrink: 0; }
+.progress-bar-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+
+/* Table */
+.table-wrap { flex: 1; overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th {
+  background: var(--surface); padding: 9px 10px;
+  text-align: left; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.8px; text-transform: uppercase; color: var(--text-dim);
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+  position: sticky; top: 0; z-index: 10;
+}
+tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+tbody tr:hover { background: var(--surface); }
+tbody td { padding: 7px 10px; vertical-align: middle; }
+tbody td:first-child {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+  color: var(--text-dim); text-align: center;
+}
+td input {
+  background: transparent; border: 1px solid transparent; border-radius: 4px;
+  color: var(--text); font-family: 'Sarabun', sans-serif; font-size: 13px;
+  padding: 3px 5px; width: 100%; outline: none; transition: all 0.15s;
+}
+td input:hover { border-color: var(--border); background: var(--surface2); }
+td input:focus { border-color: var(--accent); background: var(--surface2); }
+td.num input { text-align: right; font-family: 'IBM Plex Mono', monospace; }
+.total-cell { font-family: 'IBM Plex Mono', monospace; color: var(--accent); font-weight: 500; text-align: right; white-space: nowrap; }
+.src-doc { font-size: 10px; color: var(--text-dim); font-style: italic; max-width: 120px; }
+.delete-row {
+  background: none; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: 13px; padding: 3px 7px;
+  border-radius: 4px; transition: all 0.15s;
+}
+.delete-row:hover { background: #2a1515; color: var(--red); }
+
+/* Empty state */
+.empty-state {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: var(--text-dim); gap: 10px;
+}
+.empty-state .big-icon { font-size: 48px; opacity: 0.3; }
+.empty-state h3 { font-size: 16px; font-weight: 500; }
+.empty-state p { font-size: 13px; text-align: center; max-width: 300px; line-height: 1.7; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 22px; right: 22px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 11px 17px; font-size: 13px;
+  z-index: 999; opacity: 0; transform: translateY(10px);
+  transition: all 0.25s; max-width: 320px;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.success { border-color: var(--green); color: var(--green); }
+.toast.error { border-color: var(--red); color: var(--red); }
+.toast.info { border-color: var(--accent); color: var(--accent); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* API Modal */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.88);
+  display: flex; align-items: center; justify-content: center; z-index: 200;
+}
+.modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 28px; width: 460px; max-width: 95vw;
+}
+.modal h2 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+.modal > p { font-size: 13px; color: var(--text-dim); margin-bottom: 20px; line-height: 1.7; }
+.modal input {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 13px;
+  color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 13px;
+  margin-bottom: 12px; outline: none;
+}
+.modal input:focus { border-color: var(--accent); }
+.modal-note {
+  font-size: 11px; color: var(--text-dim);
+  background: var(--surface2); border-radius: 6px;
+  padding: 8px 12px; margin-bottom: 16px; line-height: 1.6;
+}
+.key-link {
+  display: inline-block; margin-bottom: 12px;
+  font-size: 12px; color: var(--accent); text-decoration: none;
+}
+.key-link:hover { text-decoration: underline; }
+.steps { font-size: 12px; color: var(--text-dim); margin-bottom: 14px; line-height: 2; padding-left: 4px; }
+.steps b { color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- API Key Modal -->
+<div class="modal-overlay" id="apiModal">
+  <div class="modal">
+    <div style="font-size:30px;margin-bottom:12px">🔑</div>
+    <h2>ใส่ Gemini API Key</h2>
+    <p>App นี้ใช้ Google Gemini AI อ่านใบสั่งซื้อ<br><b style="color:var(--green)">ฟรี 1,500 request/วัน</b> — ไม่มีค่าใช้จ่าย</p>
+    <div class="steps">
+      <div>1. ไปที่ <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/apikey</a></div>
+      <div>2. กด <b>"Create API Key"</b></div>
+      <div>3. Copy Key แล้วนำมาวางด้านล่าง</div>
+    </div>
+    <input type="password" id="apiKeyInput" placeholder="AIza..." autocomplete="off">
+    <div class="modal-note">
+      🔒 API Key เก็บไว้ใน browser เท่านั้น ไม่ส่งไปที่อื่น<br>
+      ใช้เฉพาะส่งรูปให้ Gemini วิเคราะห์และถอดข้อมูล
+    </div>
+    <button class="btn btn-primary" onclick="saveApiKey()">บันทึกและเริ่มใช้งาน →</button>
+  </div>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="logo">ST</div>
+  <div>
+    <h1>PO Scanner</h1>
+    <p>S.T.Bakery — ระบบอ่านใบสั่งซื้อเข้า Excel อัตโนมัติ</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+    <div class="counter-badge" id="counterBadge">0 รายการ</div>
+    <button onclick="document.getElementById('apiModal').style.display='flex'" style="background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px">⚙️ Gemini Key</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- Left Panel -->
+  <div class="left-panel">
+    <div class="panel-title">
+      ใบสั่งซื้อ
+      <span id="queueCount">0 ใบ</span>
+    </div>
+
+    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+      <div class="icon">📄</div>
+      <h3>คลิกหรือลากรูปมาวาง</h3>
+      <p>JPG, PNG, HEIC · อัปโหลดได้ทีละหลายใบ</p>
+      <input type="file" id="fileInput" accept="image/*" multiple>
+    </div>
+
+    <div class="queue" id="queueList">
+      <div style="text-align:center;color:var(--text-dim);font-size:13px;padding:20px 0;">ยังไม่มีรูป</div>
+    </div>
+
+    <div class="action-bar">
+      <button class="btn btn-primary" id="btnScan" onclick="scanAll()" disabled>🔍 สแกนทั้งหมด</button>
+      <button class="btn btn-secondary" id="btnClear" onclick="clearAll()" disabled>🗑 ล้างทั้งหมด</button>
+    </div>
+  </div>
+
+  <!-- Right Panel -->
+  <div class="right-panel">
+    <div class="table-header">
+      <div>
+        <h2>ข้อมูลที่อ่านได้</h2>
+        <p id="tableDesc">อัปโหลดและสแกนใบสั่งซื้อเพื่อดูข้อมูล</p>
+      </div>
+      <button class="btn-export" id="btnExport" onclick="exportExcel()" disabled>⬇️ Export Excel</button>
+    </div>
+
+    <div class="progress-bar"><div class="progress-bar-fill" id="progressBar" style="width:0%"></div></div>
+
+    <div id="tableArea" class="table-wrap" style="display:none">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:46px">No.</th>
+            <th style="width:100px">วันที่ซื้อ</th>
+            <th style="width:100px">วันที่อนุมัติ</th>
+            <th style="min-width:200px">รายการ</th>
+            <th style="width:70px">จำนวน</th>
+            <th style="width:70px">หน่วย</th>
+            <th style="width:100px">ราคา/หน่วย</th>
+            <th style="width:100px">ราคารวม</th>
+            <th style="min-width:150px">หมายเหตุ</th>
+            <th style="width:110px">ที่มา</th>
+            <th style="width:36px"></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <div class="empty-state" id="emptyState">
+      <div class="big-icon">📋</div>
+      <h3>ยังไม่มีข้อมูล</h3>
+      <p>อัปโหลดรูปใบสั่งซื้อแล้วกด "สแกนทั้งหมด"<br>AI จะอ่านและแสดงข้อมูลในตารางนี้</p>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let apiKey = '';
+let queue = [];
+let allRows = [];
+let rowCounter = 0;
+
+// ── API Key ──
+function saveApiKey() {
+  const v = document.getElementById('apiKeyInput').value.trim();
+  if (!v.startsWith('AIza')) return showToast('API Key ไม่ถูกต้อง (ต้องขึ้นต้นด้วย AIza)', 'error');
+  apiKey = v;
+  localStorage.setItem('stb_apikey', v);
+  document.getElementById('apiModal').style.display = 'none';
+  showToast('บันทึก Gemini API Key แล้ว ✓', 'success');
+}
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('stb_apikey');
+  if (saved) { apiKey = saved; document.getElementById('apiModal').style.display = 'none'; }
+});
+
+// ── Upload ──
+const fileInput = document.getElementById('fileInput');
+const uploadZone = document.getElementById('uploadZone');
+fileInput.addEventListener('change', e => addFiles(Array.from(e.target.files)));
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('drag-over');
+  addFiles(Array.from(e.dataTransfer.files));
+});
+
+function addFiles(files) {
+  files.forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    const id = Date.now() + Math.random();
+    const reader = new FileReader();
+    reader.onload = e => {
+      queue.push({ id, file, name: file.name, dataUrl: e.target.result, status: 'wait', items: [] });
+      renderQueue();
+    };
+    reader.readAsDataURL(file);
+  });
+  // Reset input so same file can be re-added
+  fileInput.value = '';
+}
+
+function renderQueue() {
+  const list = document.getElementById('queueList');
+  document.getElementById('queueCount').textContent = queue.length + ' ใบ';
+  document.getElementById('btnScan').disabled = queue.length === 0;
+  document.getElementById('btnClear').disabled = queue.length === 0;
+  if (queue.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text-dim);font-size:13px;padding:20px 0;">ยังไม่มีรูป</div>';
+    return;
+  }
+  list.innerHTML = queue.map(q => `
+    <div class="queue-item">
+      <img class="thumb" src="${q.dataUrl}" alt="">
+      <div class="info">
+        <div class="fname">${h(q.name)}</div>
+        <div class="status ${stClass(q.status)}">${stText(q.status)}${q.items.length ? ` · ${q.items.length} รายการ` : ''}</div>
+      </div>
+      ${q.status==='wait'||q.status==='error' ? `<button class="btn-remove" onclick="removeItem('${q.id}')">✕</button>` : ''}
+    </div>`).join('');
+}
+const stClass = s => ({wait:'status-wait',reading:'status-reading',done:'status-done',error:'status-error'}[s]||'');
+const stText  = s => ({wait:'⏳ รอสแกน',reading:'🔍 กำลังอ่าน...',done:'✓ สแกนแล้ว',error:'✗ อ่านไม่ได้'}[s]||s);
+
+function removeItem(id) { queue = queue.filter(q => String(q.id) !== String(id)); renderQueue(); }
+function clearAll() { queue = []; allRows = []; rowCounter = 0; renderQueue(); renderTable(); }
+
+// ── Scan ──
+async function scanAll() {
+  if (!apiKey) { document.getElementById('apiModal').style.display='flex'; return; }
+  const pending = queue.filter(q => q.status==='wait' || q.status==='error');
+  if (!pending.length) return showToast('ไม่มีใบที่ต้องสแกน', 'info');
+  document.getElementById('btnScan').disabled = true;
+  let done = 0;
+  for (const item of pending) {
+    item.status = 'reading'; renderQueue(); setProgress(done, pending.length);
+    try {
+      const rows = await readPO(item);
+      item.status = 'done'; item.items = rows;
+      rows.forEach(r => { rowCounter++; allRows.push({...r, no: rowCounter, rowId: rowCounter, src: item.name}); });
+    } catch(e) {
+      item.status = 'error'; console.error(e);
+      showToast('อ่านไม่ได้: ' + item.name, 'error');
+    }
+    done++; renderQueue(); setProgress(done, pending.length); renderTable();
+  }
+  document.getElementById('btnScan').disabled = false;
+  showToast(`✓ สแกนเสร็จ ${done} ใบ รวม ${allRows.length} รายการ`, 'success');
+}
+function setProgress(done, total) {
+  document.getElementById('progressBar').style.width = (total>0 ? done/total*100 : 0) + '%';
+}
+
+// ── Gemini API ──
+async function readPO(item) {
+  const base64 = item.dataUrl.split(',')[1];
+  const mediaType = item.file.type || 'image/jpeg';
+
+  const prompt = `คุณคือระบบอ่านใบสั่งซื้อ S.T.Bakery ตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่น
+
+ดึงข้อมูลต่อไปนี้:
+- purchase_date: วันที่ผู้ขอซื้อเซ็น (ล่างซ้าย) รูปแบบ DD/MM/YYYY
+- approved_date: วันที่กรรมการผู้จัดการเซ็น (ล่างขวา) รูปแบบ DD/MM/YYYY
+- items: รายการสินค้าทุกแถวในตาราง โดยแต่ละรายการมี:
+  - name: ชื่อสินค้า/รายการ (เต็ม รวม spec ที่เขียนไว้)
+  - qty: จำนวน (ตัวเลขเท่านั้น)
+  - unit: หน่วยนับ (เช่น หลอด ฝ่า ใบ ม้วน อัน ชุด)
+  - unit_price: ราคาต่อหน่วย — ถ้าเขียน "10x450" ให้ใช้ 450, ถ้าเขียน "5,000" ให้ใช้ 5000 (ตัวเลขเท่านั้น ไม่มี comma)
+  - remark: หมายเหตุ/สถานที่จัดหา (ถ้ามี มิฉะนั้นใส่ "")
+
+ตอบกลับเฉพาะ JSON นี้:
+{"purchase_date":"DD/MM/YYYY","approved_date":"DD/MM/YYYY","items":[{"name":"...","qty":0,"unit":"...","unit_price":0,"remark":"..."}]}
+
+ถ้าอ่านไม่ได้ใส่ "" หรือ 0`;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key=${apiKey}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { inline_data: { mime_type: mediaType, data: base64 } },
+          { text: prompt }
+        ]
+      }],
+      generationConfig: { temperature: 0, maxOutputTokens: 2000 }
+    })
+  });
+
+  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'Gemini API Error'); }
+  const data = await res.json();
+  const text = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim().replace(/```json|```/g,'').trim();
+  const parsed = JSON.parse(text);
+  return (parsed.items || []).map(it => ({
+    purchase_date: parsed.purchase_date || '',
+    approved_date: parsed.approved_date || '',
+    name: it.name || '',
+    qty: it.qty || 0,
+    unit: it.unit || '',
+    unit_price: it.unit_price || 0,
+    remark: it.remark || ''
+  }));
+}
+
+// ── Table ──
+function renderTable() {
+  const tableArea = document.getElementById('tableArea');
+  const emptyState = document.getElementById('emptyState');
+  const tbody = document.getElementById('tableBody');
+  document.getElementById('counterBadge').textContent = allRows.length + ' รายการ';
+  document.getElementById('tableDesc').textContent = allRows.length
+    ? `${allRows.length} รายการ จาก ${new Set(allRows.map(r=>r.src)).size} ใบ`
+    : 'อัปโหลดและสแกนใบสั่งซื้อเพื่อดูข้อมูล';
+  document.getElementById('btnExport').disabled = allRows.length === 0;
+
+  if (!allRows.length) {
+    tableArea.style.display = 'none'; emptyState.style.display = 'flex'; return;
+  }
+  tableArea.style.display = 'block'; emptyState.style.display = 'none';
+
+  tbody.innerHTML = allRows.map((r, i) => {
+    const total = ((+r.qty) * (+r.unit_price)) || 0;
+    return `<tr>
+      <td>${r.no}</td>
+      <td><input value="${h(r.purchase_date)}" onchange="upd(${i},'purchase_date',this.value)"></td>
+      <td><input value="${h(r.approved_date)}" onchange="upd(${i},'approved_date',this.value)"></td>
+      <td><input value="${h(r.name)}" onchange="upd(${i},'name',this.value)" style="min-width:180px"></td>
+      <td class="num"><input type="number" value="${r.qty}" onchange="upd(${i},'qty',+this.value);rc(${i})" style="width:65px"></td>
+      <td><input value="${h(r.unit)}" onchange="upd(${i},'unit',this.value)" style="width:65px"></td>
+      <td class="num"><input type="number" value="${r.unit_price}" onchange="upd(${i},'unit_price',+this.value);rc(${i})" style="width:85px"></td>
+      <td class="total-cell" id="tot${i}">${fmt(total)}</td>
+      <td><input value="${h(r.remark)}" onchange="upd(${i},'remark',this.value)" style="min-width:130px"></td>
+      <td class="src-doc">${h(r.src)}</td>
+      <td><button class="delete-row" onclick="delRow(${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function h(s) { return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function fmt(n) { return Number(n||0).toLocaleString('th-TH'); }
+function upd(i, f, v) { allRows[i][f] = v; }
+function rc(i) { document.getElementById('tot'+i).textContent = fmt((+allRows[i].qty)*(+allRows[i].unit_price)); }
+function delRow(i) {
+  allRows.splice(i, 1);
+  allRows.forEach((r,idx) => r.no = idx+1);
+  rowCounter = allRows.length;
+  renderTable();
+}
+
+// ── Export ──
+function exportExcel() {
+  if (!allRows.length) return;
+  const now = new Date();
+  const months = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  const title = `สรุปรายการสั่งซื้อ เดือน ${months[now.getMonth()]} ${now.getFullYear()+543}`;
+
+  const headers = ['No','วันที่ซื้อ','วันที่อนุมัติ','รายการ','จำนวน','หน่วย','ราคาต่อหน่วย','ราคารวม','หมายเหตุ'];
+  const rows = allRows.map(r => [r.no, r.purchase_date, r.approved_date, r.name, +r.qty, r.unit, +r.unit_price, (+r.qty)*(+r.unit_price), r.remark]);
+
+  const ws = XLSX.utils.aoa_to_sheet([[title],[],headers,...rows]);
+  ws['!cols'] = [{wch:6},{wch:12},{wch:14},{wch:38},{wch:9},{wch:9},{wch:14},{wch:12},{wch:32}];
+  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:8}}];
+
+  // Style header row (row index 2)
+  const headerRow = 2;
+  headers.forEach((_, ci) => {
+    const cellRef = XLSX.utils.encode_cell({r: headerRow, c: ci});
+    if (!ws[cellRef]) ws[cellRef] = {};
+    ws[cellRef].s = { font: { bold: true }, fill: { fgColor: { rgb: 'F5C842' } } };
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'รายการสั่งซื้อ');
+  const fname = `PO_STBakery_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}.xlsx`;
+  XLSX.writeFile(wb, fname);
+  showToast('✓ Export สำเร็จ: ' + fname, 'success');
+}
+
+// ── Toast ──
+function showToast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+</script>
+</body>
+</html>
